@@ -128,6 +128,7 @@ type Common struct {
 	DeviceID           string  `json:"device_id,omitempty"`
 	FirstName          string  `json:"first_name,omitempty" example:"John"`
 	LastName           string  `json:"last_name,omitempty" example:"Doe"`
+	BillingName        string  `json:"billing_name,omitempty"`
 	IdentityNumber     string  `json:"identity_number,omitempty" example:"123456789"`
 	Email              string  `json:"email,omitempty"`
 	IPAddress          string  `json:"ip_address,omitempty"`
@@ -146,6 +147,16 @@ type Common struct {
 	Phone              string  `json:"phone,omitempty"`
 	ReferenceID        string  `json:"reference_id,omitempty"`
 	UserID             string  `json:"user_id,omitempty"`
+
+	ShippingAddress *ShippingAddress `json:"shipping_address,omitempty"`
+}
+
+// ShippingAddress identifies the delivery location used by an order.
+type ShippingAddress struct {
+	Address string `json:"address"`
+	City    string `json:"city"`
+	Country string `json:"country"`
+	ZipCode string `json:"zip_code,omitempty"`
 }
 
 // Card holds payment card details.
@@ -283,8 +294,15 @@ type Withdrawal struct {
 	WithdrawalMethod     string `json:"withdrawal_method,omitempty"`
 }
 
+// RuleWarning is a risk finding that does not hold or reject a payment.
+type RuleWarning struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
 // ProcessResponse represents the result of rule processing.
 type ProcessResponse struct {
+	Warnings       []RuleWarning `json:"warnings,omitempty"`
 	TransactionID  string        `json:"transaction_id,omitempty"`
 	Allow          bool          `json:"allow"`
 	AllowMessage   string        `json:"allow_message,omitempty"`

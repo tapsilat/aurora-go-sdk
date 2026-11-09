@@ -6,6 +6,20 @@ import (
 	"testing"
 )
 
+func TestShippingAddressJSON(t *testing.T) {
+	data, err := json.Marshal(Common{ShippingAddress: &ShippingAddress{Address: "Main St 12/3", City: "Istanbul", Country: "TR", ZipCode: "34000"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded Common
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.ShippingAddress == nil || decoded.ShippingAddress.Address != "Main St 12/3" || decoded.ShippingAddress.ZipCode != "34000" {
+		t.Fatalf("lost shipping address: %s", data)
+	}
+}
+
 func TestTransactionCustomerAgeYearsJSON(t *testing.T) {
 	payload, err := json.Marshal(Transaction{Type: TransactionTypeTransfer, CustomerAgeYears: "29"})
 	if err != nil {
