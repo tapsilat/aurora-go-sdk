@@ -147,6 +147,16 @@ type Common struct {
 	Phone              string  `json:"phone,omitempty"`
 	ReferenceID        string  `json:"reference_id,omitempty"`
 	UserID             string  `json:"user_id,omitempty"`
+
+	ShippingAddress *ShippingAddress `json:"shipping_address,omitempty"`
+}
+
+// ShippingAddress identifies the delivery location used by an order.
+type ShippingAddress struct {
+	Address string `json:"address"`
+	City    string `json:"city"`
+	Country string `json:"country"`
+	ZipCode string `json:"zip_code,omitempty"`
 }
 
 // Card holds payment card details.
