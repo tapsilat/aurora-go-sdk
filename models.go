@@ -2,61 +2,6 @@ package aurora
 
 import "time"
 
-// Transaction type constants.
-const (
-	TransactionTypeCard           = "card"
-	TransactionTypeTransfer       = "transfer"
-	TransactionTypeRemittance     = "remittance"
-	TransactionTypeAccountOpening = "account_opening"
-	TransactionTypeAccountLogin   = "account_login"
-	TransactionTypeAccountChange  = "account_change"
-	TransactionTypeRefund         = "refund"
-	TransactionTypeWithdrawal     = "withdrawal"
-	TransactionTypeDeposit        = "deposit"
-	TransactionTypeP2P            = "p2p"
-	TransactionTypeCrypto         = "crypto"
-	TransactionTypeBNPL           = "bnpl"
-	TransactionTypeLoan           = "loan"
-	TransactionTypeInvoice        = "invoice"
-)
-
-// Transfer subtype constants for Transfer.TransferType.
-const (
-	TransferTypeWalletToWallet = "wallet_to_wallet"
-	TransferTypeWalletToIBAN   = "wallet_to_iban"
-	TransferTypeIBANToWallet   = "iban_to_wallet"
-	TransferTypeRemittance     = "remittance"
-)
-
-// Withdrawal method constants for Withdrawal.WithdrawalMethod.
-const (
-	WithdrawalMethodMoneyTransferCollection = "money_transfer_collection"
-)
-
-// Customer account type constants.
-const (
-	CustomerAccountTypeIndividual   = "individual"
-	CustomerAccountTypeOrganization = "organization"
-)
-
-// validTransactionTypes is the set of accepted transaction types.
-var validTransactionTypes = map[string]bool{
-	TransactionTypeCard:           true,
-	TransactionTypeTransfer:       true,
-	TransactionTypeRemittance:     true,
-	TransactionTypeAccountOpening: true,
-	TransactionTypeAccountLogin:   true,
-	TransactionTypeAccountChange:  true,
-	TransactionTypeRefund:         true,
-	TransactionTypeWithdrawal:     true,
-	TransactionTypeDeposit:        true,
-	TransactionTypeP2P:            true,
-	TransactionTypeCrypto:         true,
-	TransactionTypeBNPL:           true,
-	TransactionTypeLoan:           true,
-	TransactionTypeInvoice:        true,
-}
-
 // ProcessRequest represents a rule processing request.
 type ProcessRequest struct {
 	RuleID        string `json:"rule_id,omitempty"`
@@ -301,19 +246,26 @@ type RuleWarning struct {
 }
 
 // ProcessResponse represents the result of rule processing.
+//
+// Exactly one of Allow, Rejected, Challenge and NeedInspect is normally set.
+// Error reports that at least one active rule failed to evaluate; it can be
+// set together with a Rejected, Challenge or NeedInspect decision.
 type ProcessResponse struct {
-	Warnings       []RuleWarning `json:"warnings,omitempty"`
-	TransactionID  string        `json:"transaction_id,omitempty"`
-	Allow          bool          `json:"allow"`
-	AllowMessage   string        `json:"allow_message,omitempty"`
-	Error          bool          `json:"error"`
-	ErrorMessage   string        `json:"error_message,omitempty"`
-	ExecutionTime  time.Duration `json:"execution_time"`
-	InspectMessage string        `json:"inspect_message,omitempty"`
-	NeedInspect    bool          `json:"need_inspect"`
-	RejectMessage  string        `json:"reject_message,omitempty"`
-	Rejected       bool          `json:"rejected"`
-	Score          int           `json:"score"`
+	Warnings         []RuleWarning `json:"warnings,omitempty"`
+	TransactionID    string        `json:"transaction_id,omitempty"`
+	Allow            bool          `json:"allow"`
+	AllowMessage     string        `json:"allow_message,omitempty"`
+	Challenge        bool          `json:"challenge"`
+	ChallengeMessage string        `json:"challenge_message,omitempty"`
+	ChallengeType    string        `json:"challenge_type,omitempty"`
+	Error            bool          `json:"error"`
+	ErrorMessage     string        `json:"error_message,omitempty"`
+	ExecutionTime    time.Duration `json:"execution_time"`
+	InspectMessage   string        `json:"inspect_message,omitempty"`
+	NeedInspect      bool          `json:"need_inspect"`
+	RejectMessage    string        `json:"reject_message,omitempty"`
+	Rejected         bool          `json:"rejected"`
+	Score            int           `json:"score"`
 }
 
 // CallbackTransactionRequest represents a callback transaction request.
@@ -328,7 +280,9 @@ type CallbackTransactionResponse struct {
 	Message string `json:"message"`
 }
 
-// ErrorResponse represents an API error.
+// ErrorResponse represents an API error body. Endpoints use either the
+// "error" or the "message" key.
 type ErrorResponse struct {
-	Error string `json:"error"`
+	Error   string `json:"error"`
+	Message string `json:"message,omitempty"`
 }

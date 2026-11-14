@@ -12,6 +12,9 @@ type CallbackService struct {
 
 // Transaction sends a callback transaction request.
 func (s *CallbackService) Transaction(ctx context.Context, req *CallbackTransactionRequest) (*CallbackTransactionResponse, error) {
+	if req == nil {
+		return nil, &ValidationError{Field: "request", Message: "request is required"}
+	}
 	if req.PaymentID == "" {
 		return nil, &ValidationError{Field: "payment_id", Message: "payment_id is required"}
 	}

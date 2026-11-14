@@ -7,14 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
-)
-
-const (
-	defaultBaseURL = "https://localhost:3000"
-	basePath       = "/api/v1"
-	defaultTimeout = 30 * time.Second
 )
 
 // Client is the Aurora API client.
@@ -23,45 +16,34 @@ type Client struct {
 	apiKey     string
 	httpClient *http.Client
 
+	// timeout is the value set by WithTimeout; NewClient applies it after
+	// all options run, so the result does not depend on option order.
+	timeout time.Duration
+
 	Callback *CallbackService
 	Process  *ProcessService
 }
 
-// Option is a functional option for configuring the Client.
-type Option func(*Client)
-
-// WithBaseURL sets the host URL (e.g. "https://api.example.com").
-// The API path (/api/v1) is appended automatically.
-func WithBaseURL(url string) Option {
-	return func(c *Client) {
-		c.baseURL = strings.TrimRight(url, "/")
-	}
-}
-
-// WithHTTPClient sets a custom HTTP client.
-func WithHTTPClient(hc *http.Client) Option {
-	return func(c *Client) {
-		c.httpClient = hc
-	}
-}
-
-// WithTimeout sets the HTTP client timeout.
-func WithTimeout(d time.Duration) Option {
-	return func(c *Client) {
-		c.httpClient.Timeout = d
-	}
-}
-
 // NewClient creates a new Aurora API client.
 func NewClient(apiKey string, opts ...Option) *Client {
-	c := &Client{
-		baseURL:    defaultBaseURL,
-		apiKey:     apiKey,
-		httpClient: &http.Client{Timeout: defaultTimeout},
+	c := &Client{apiKey: apiKey}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(c)
+		}
 	}
 
-	for _, opt := range opts {
-		opt(c)
+	switch {
+	case c.httpClient == nil:
+		timeout := defaultTimeout
+		if c.timeout > 0 {
+			timeout = c.timeout
+		}
+		c.httpClient = &http.Client{Timeout: timeout}
+	case c.timeout > 0:
+		copied := *c.httpClient
+		copied.Timeout = c.timeout
+		c.httpClient = &copied
 	}
 
 	c.Callback = &CallbackService{client: c}
@@ -72,6 +54,9 @@ func NewClient(apiKey string, opts ...Option) *Client {
 
 // newRequest builds an authenticated HTTP request.
 func (c *Client) newRequest(ctx context.Context, method, path string, body any) (*http.Request, error) {
+	if c.baseURL == "" {
+		return nil, ErrMissingBaseURL
+	}
 	url := c.baseURL + basePath + path
 
 	var buf io.Reader
@@ -95,12 +80,10 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body any) 
 	return req, nil
 }
 
-const maxResponseSize = 10 << 20 // 10 MB
-
-// drainBody reads and discards remaining body bytes so the underlying
-// TCP connection can be reused by the HTTP transport pool.
+// drainBody discards a bounded amount of the remaining body so the
+// underlying TCP connection can be reused by the HTTP transport pool.
 func drainBody(body io.ReadCloser) {
-	_, _ = io.Copy(io.Discard, body)
+	_, _ = io.Copy(io.Discard, io.LimitReader(body, maxDrainSize))
 	body.Close()
 }
 
@@ -119,17 +102,7 @@ func (c *Client) do(req *http.Request, v any) error {
 	}
 
 	if resp.StatusCode >= 400 {
-		var apiErr ErrorResponse
-		if err := json.Unmarshal(respBody, &apiErr); err == nil && apiErr.Error != "" {
-			return &APIError{
-				StatusCode: resp.StatusCode,
-				Message:    apiErr.Error,
-			}
-		}
-		return &APIError{
-			StatusCode: resp.StatusCode,
-			Message:    string(respBody),
-		}
+		return newAPIError(resp.StatusCode, respBody)
 	}
 
 	if v != nil {
