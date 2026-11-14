@@ -11,8 +11,23 @@ const (
 	defaultTimeout = 30 * time.Second
 )
 
+// API endpoints, relative to basePath.
+const (
+	pathProcess             = "/process"
+	pathCallbackTransaction = "/callback/transaction"
+)
+
+// Request headers.
+const (
+	authScheme      = "Bearer "
+	contentTypeJSON = "application/json"
+)
+
 const (
 	maxResponseSize = 10 << 20 // 10 MB
+	// maxErrorMessageLen bounds the message taken from a non-JSON error body,
+	// such as an HTML page from a proxy.
+	maxErrorMessageLen = 512
 	// maxDrainSize bounds how much unread body is discarded to keep the
 	// connection reusable. A larger remainder is not worth reading; closing
 	// the body then simply drops the connection.

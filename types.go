@@ -54,3 +54,9 @@ var validTransactionTypes = map[string]bool{
 	TransactionTypeLoan:           true,
 	TransactionTypeInvoice:        true,
 }
+
+// Callback status constants for CallbackTransactionRequest.Status.
+const (
+	CallbackStatusSuccess = "success"
+	CallbackStatusFailed  = "failed"
+)

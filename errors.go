@@ -12,10 +12,6 @@ import (
 // created without WithBaseURL.
 var ErrMissingBaseURL = errors.New("aurora: base URL is not configured (use WithBaseURL)")
 
-// maxErrorMessageLen bounds the message taken from a non-JSON error body,
-// such as an HTML page from a proxy.
-const maxErrorMessageLen = 512
-
 // APIError represents an error returned by the Aurora API.
 type APIError struct {
 	StatusCode int

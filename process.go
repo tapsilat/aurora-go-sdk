@@ -21,7 +21,7 @@ func (s *ProcessService) Execute(ctx context.Context, req *ProcessRequest) (*Pro
 		return nil, err
 	}
 
-	httpReq, err := s.client.newRequest(ctx, http.MethodPost, "/process", req)
+	httpReq, err := s.client.newRequest(ctx, http.MethodPost, pathProcess, req)
 	if err != nil {
 		return nil, err
 	}

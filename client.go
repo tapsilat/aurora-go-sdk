@@ -73,9 +73,9 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body any) 
 		return nil, fmt.Errorf("aurora: create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", authScheme+c.apiKey)
+	req.Header.Set("Content-Type", contentTypeJSON)
+	req.Header.Set("Accept", contentTypeJSON)
 
 	return req, nil
 }
@@ -101,7 +101,7 @@ func (c *Client) do(req *http.Request, v any) error {
 		return fmt.Errorf("aurora: read response body: %w", err)
 	}
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= http.StatusBadRequest {
 		return newAPIError(resp.StatusCode, respBody)
 	}
 

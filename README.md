@@ -270,13 +270,15 @@ if err != nil {
 
 ## Callback
 
-Send a callback transaction using `client.Callback.Transaction()`.
+Report the final outcome of a payment using `client.Callback.Transaction()`.
+`PaymentID` must match the `common.payment_id` sent with the process request.
+Sending the same status again is safe.
 
 ```go
 resp, err := client.Callback.Transaction(ctx, &aurora.CallbackTransactionRequest{
     Message:   "Payment completed",
     PaymentID: "pay_1234567890",
-    Status:    "success",
+    Status:    aurora.CallbackStatusSuccess,
 })
 if err != nil {
     log.Fatal(err)
@@ -289,9 +291,9 @@ fmt.Printf("Message: %s\n", resp.Message)
 
 | Field | JSON Key | Description |
 |---|---|---|
-| `Message` | `message` | Callback message |
-| `PaymentID` | `payment_id` | Payment identifier |
-| `Status` | `status` | Transaction status |
+| `Message` | `message` | Outcome description. Required. |
+| `PaymentID` | `payment_id` | The `common.payment_id` of the processed transaction. Required. |
+| `Status` | `status` | `aurora.CallbackStatusSuccess` (`success`) or `aurora.CallbackStatusFailed` (`failed`). Required. |
 
 ### Response
 
