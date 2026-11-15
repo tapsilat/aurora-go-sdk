@@ -8,15 +8,21 @@ import (
 	"strings"
 )
 
-// ErrMissingBaseURL is returned when a request is made by a client that was
-// created without WithBaseURL.
+// ErrMissingBaseURL is returned by every call on a client created without
+// WithBaseURL. No request is sent.
 var ErrMissingBaseURL = errors.New("aurora: base URL is not configured (use WithBaseURL)")
 
-// APIError represents an error returned by the Aurora API.
+// APIError is returned when Aurora responds with status 400 or higher. Use
+// errors.As to get it, or the IsNotFound, IsUnauthorized and IsRateLimited
+// helpers.
 type APIError struct {
+	// StatusCode is the HTTP status of the response.
 	StatusCode int
-	Message    string
-	// Body is the raw response body, kept for logging and debugging.
+	// Message is the error text from the response body. If the body is not
+	// an Aurora error object, it holds the body itself, cut to 512 bytes, or
+	// the standard status text when the body is empty.
+	Message string
+	// Body is the raw response body, for logging and debugging.
 	Body []byte
 }
 
@@ -24,9 +30,8 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("aurora: api error (status %d): %s", e.StatusCode, e.Message)
 }
 
-// newAPIError builds an APIError from a failed response. Aurora returns
-// either {"error": "..."} or {"message": "..."} depending on the endpoint;
-// any other body is used as-is, truncated.
+// newAPIError builds an APIError from a failed response. See APIError.Message
+// for how the message is chosen.
 func newAPIError(statusCode int, body []byte) *APIError {
 	return &APIError{
 		StatusCode: statusCode,
@@ -57,8 +62,11 @@ func errorMessage(statusCode int, body []byte) string {
 	return text
 }
 
-// ValidationError represents a client-side validation error.
+// ValidationError is returned when a request fails the SDK's checks. The
+// request is not sent.
 type ValidationError struct {
+	// Field is the JSON name of the invalid field, such as "payment_id" or
+	// "transaction.type", or "request" when the request itself is nil.
 	Field   string
 	Message string
 }
@@ -67,7 +75,9 @@ func (e *ValidationError) Error() string {
 	return fmt.Sprintf("aurora: validation error: %s: %s", e.Field, e.Message)
 }
 
-// IsNotFound reports whether err is an API error with status 404.
+// IsNotFound reports whether err is an API error with status 404. Note that
+// Aurora reports an unknown transaction ID or payment ID with status 500, so
+// those cases do not match.
 func IsNotFound(err error) bool { return hasStatus(err, http.StatusNotFound) }
 
 // IsUnauthorized reports whether err is an API error with status 401 or 403.

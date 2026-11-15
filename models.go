@@ -2,15 +2,22 @@ package aurora
 
 import "time"
 
-// ProcessRequest represents a rule processing request.
+// ProcessRequest is the input to ProcessService.Execute.
 type ProcessRequest struct {
-	RuleID        string `json:"rule_id,omitempty"`
-	RulesetID     string `json:"ruleset_id,omitempty"`
+	// RuleID selects a single rule. It takes precedence over RulesetID.
+	RuleID string `json:"rule_id,omitempty"`
+	// RulesetID selects a ruleset. Used only when RuleID is empty.
+	RulesetID string `json:"ruleset_id,omitempty"`
+	// TransactionID re-evaluates a transaction Aurora already stored. Leave it
+	// empty to submit a new transaction in Transaction.
 	TransactionID string `json:"transaction_id,omitempty"`
 	// LifecycleRootTransactionID links a remittance collection to the remittance
-	// send that opened its lifecycle; only valid on a remittance collection request.
-	LifecycleRootTransactionID string       `json:"lifecycle_root_transaction_id,omitempty"`
-	Transaction                *Transaction `json:"transaction,omitempty"`
+	// send that opened its lifecycle. Set it only on a remittance collection
+	// request. On re-evaluation it must match the link already stored.
+	LifecycleRootTransactionID string `json:"lifecycle_root_transaction_id,omitempty"`
+	// Transaction is the data to evaluate. Required when TransactionID is
+	// empty; ignored by Aurora when TransactionID is set.
+	Transaction *Transaction `json:"transaction,omitempty"`
 }
 
 // Transaction contains all the data fields that can be evaluated by rules.
@@ -239,49 +246,81 @@ type Withdrawal struct {
 	WithdrawalMethod     string `json:"withdrawal_method,omitempty"`
 }
 
-// RuleWarning is a risk finding that does not hold or reject a payment.
+// RuleWarning is a risk finding that does not block, hold or challenge a
+// payment on its own.
 type RuleWarning struct {
+	// Code identifies the warning. It defaults to the rule node's ID when the
+	// rule does not set one.
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 
-// ProcessResponse represents the result of rule processing.
+// ProcessResponse is the decision returned by ProcessService.Execute.
 //
-// Exactly one of Allow, Rejected, Challenge and NeedInspect is normally set.
-// Error reports that at least one active rule failed to evaluate; it can be
-// set together with a Rejected, Challenge or NeedInspect decision.
+// The decision is carried by four flags: Rejected, Challenge, NeedInspect and
+// Allow. For a ruleset, Aurora sets exactly one of them, using that order of
+// precedence. For a single rule, more than one can be true, because each
+// output node of the rule sets its own flag. Check the flags in the same
+// order: Rejected, Challenge, NeedInspect, Allow.
+//
+// Error means at least one rule failed to evaluate. Do not treat the payment
+// as allowed when Error is true. For a ruleset, Aurora then clears Allow and
+// keeps any Rejected, Challenge or NeedInspect result. If no rule produced
+// one, all four flags are false.
 type ProcessResponse struct {
-	Warnings         []RuleWarning `json:"warnings,omitempty"`
-	TransactionID    string        `json:"transaction_id,omitempty"`
-	Allow            bool          `json:"allow"`
-	AllowMessage     string        `json:"allow_message,omitempty"`
-	Challenge        bool          `json:"challenge"`
-	ChallengeMessage string        `json:"challenge_message,omitempty"`
-	ChallengeType    string        `json:"challenge_type,omitempty"`
-	Error            bool          `json:"error"`
-	ErrorMessage     string        `json:"error_message,omitempty"`
-	ExecutionTime    time.Duration `json:"execution_time"`
-	InspectMessage   string        `json:"inspect_message,omitempty"`
-	NeedInspect      bool          `json:"need_inspect"`
-	RejectMessage    string        `json:"reject_message,omitempty"`
-	Rejected         bool          `json:"rejected"`
-	Score            int           `json:"score"`
+	// Warnings lists risk findings that do not block, hold or challenge the
+	// payment.
+	Warnings []RuleWarning `json:"warnings,omitempty"`
+	// TransactionID is Aurora's ID for the evaluated transaction. Pass it as
+	// ProcessRequest.TransactionID to re-evaluate the transaction later.
+	TransactionID string `json:"transaction_id,omitempty"`
+
+	// Allow means the payment can proceed.
+	Allow        bool   `json:"allow"`
+	AllowMessage string `json:"allow_message,omitempty"`
+	// Challenge means the customer must complete an extra verification step
+	// before the payment can proceed.
+	Challenge        bool   `json:"challenge"`
+	ChallengeMessage string `json:"challenge_message,omitempty"`
+	// ChallengeType is the verification type configured on the rule. Its
+	// values are defined in the rule, not by Aurora.
+	ChallengeType string `json:"challenge_type,omitempty"`
+	// Error means at least one rule failed to evaluate. See the type comment.
+	Error        bool   `json:"error"`
+	ErrorMessage string `json:"error_message,omitempty"`
+	// ExecutionTime is how long the rule evaluation took on Aurora's side.
+	ExecutionTime  time.Duration `json:"execution_time"`
+	InspectMessage string        `json:"inspect_message,omitempty"`
+	// NeedInspect means the payment is held for manual review.
+	NeedInspect   bool   `json:"need_inspect"`
+	RejectMessage string `json:"reject_message,omitempty"`
+	// Rejected means the payment must be blocked.
+	Rejected bool `json:"rejected"`
+	// Score is the sum of the scores added by the evaluated rules. It is
+	// informational: the flags above carry the decision.
+	Score int `json:"score"`
 }
 
-// CallbackTransactionRequest represents a callback transaction request.
+// CallbackTransactionRequest is the input to CallbackService.Transaction.
 type CallbackTransactionRequest struct {
-	Message   string `json:"message"`
+	// Message describes the outcome. Required.
+	Message string `json:"message"`
+	// PaymentID identifies the payment. It must equal the common.payment_id
+	// sent when the transaction was processed, and must match exactly one
+	// transaction in your organization.
 	PaymentID string `json:"payment_id"`
-	Status    string `json:"status"`
+	// Status is CallbackStatusSuccess or CallbackStatusFailed.
+	Status string `json:"status"`
 }
 
-// CallbackTransactionResponse represents the result of a callback transaction.
+// CallbackTransactionResponse is the acknowledgement Aurora returns for a
+// recorded outcome.
 type CallbackTransactionResponse struct {
 	Message string `json:"message"`
 }
 
-// ErrorResponse represents an API error body. Endpoints use either the
-// "error" or the "message" key.
+// ErrorResponse is the JSON body Aurora sends with an error status. Depending
+// on the endpoint, the text is under the "error" key or the "message" key.
 type ErrorResponse struct {
 	Error   string `json:"error"`
 	Message string `json:"message,omitempty"`

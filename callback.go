@@ -6,17 +6,27 @@ import (
 	"strings"
 )
 
-// CallbackService handles callback operations.
+// CallbackService reports payment outcomes back to Aurora.
 type CallbackService struct {
 	client *Client
 }
 
-// Transaction reports the final outcome of a payment that Aurora evaluated.
+// Transaction records the final outcome of a payment (POST /callback/transaction).
+// Aurora finds the transaction in your organization whose common.payment_id
+// equals req.PaymentID and stores req.Status and req.Message on it. A success
+// outcome is also added to the device history that rules can check.
 //
-// PaymentID must match the common.payment_id sent with the process request.
-// Status is CallbackStatusSuccess or CallbackStatusFailed, and Message is
-// required. Sending the same status again is safe: Aurora accepts it without
-// changing anything.
+// The outcome is final once recorded:
+//   - Sending the same status again succeeds and changes nothing.
+//   - Sending a different status for a transaction that already has one
+//     returns an *APIError.
+//   - A PaymentID that matches no transaction, or more than one, returns an
+//     *APIError.
+//
+// Aurora currently reports both errors with status 500, not 404 or 409.
+//
+// A request that fails validation returns a *ValidationError without
+// contacting Aurora.
 func (s *CallbackService) Transaction(ctx context.Context, req *CallbackTransactionRequest) (*CallbackTransactionResponse, error) {
 	if err := req.validate(); err != nil {
 		return nil, err
@@ -35,14 +45,14 @@ func (s *CallbackService) Transaction(ctx context.Context, req *CallbackTransact
 	return &resp, nil
 }
 
-// validate mirrors the checks Aurora applies, so a request the API would
-// reject with 400 fails here without a round trip.
+// validate applies Aurora's own checks before sending, so a request Aurora
+// would reject fails without a network call.
 func (req *CallbackTransactionRequest) validate() error {
 	if req == nil {
 		return &ValidationError{Field: "request", Message: "request is required"}
 	}
-	// A blank payment_id passes Aurora's 400 check but can never match a
-	// transaction, so Aurora rejects it later with 500.
+	// Aurora's input check accepts a whitespace-only payment_id, but such an ID
+	// matches no transaction and Aurora then fails with 500.
 	if strings.TrimSpace(req.PaymentID) == "" {
 		return &ValidationError{Field: "payment_id", Message: "payment_id is required"}
 	}

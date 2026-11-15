@@ -34,20 +34,23 @@ const (
 	maxDrainSize = 64 << 10 // 64 KB
 )
 
-// Option is a functional option for configuring the Client.
+// Option configures a Client. Pass options to NewClient. A nil Option is
+// ignored.
 type Option func(*Client)
 
-// WithBaseURL sets the host URL (e.g. "https://api.example.com").
-// The API path (/api/v1) is appended automatically. It is required: requests
-// made by a client without a base URL return ErrMissingBaseURL.
+// WithBaseURL sets the API host, for example "https://api.example.com".
+// Do not include /api/v1: the client adds it. Surrounding spaces and
+// trailing slashes are removed. This option is required; without it, every
+// call returns ErrMissingBaseURL.
 func WithBaseURL(url string) Option {
 	return func(c *Client) {
 		c.baseURL = strings.TrimRight(strings.TrimSpace(url), "/")
 	}
 }
 
-// WithHTTPClient sets a custom HTTP client. A nil client is ignored.
-// The client is never modified; WithTimeout applies to a copy of it.
+// WithHTTPClient makes the client send requests through hc, for example to
+// use a custom transport or proxy. Its own Timeout is kept unless WithTimeout
+// is also given. hc is never modified, and a nil hc is ignored.
 func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) {
 		if hc != nil {
@@ -56,9 +59,11 @@ func WithHTTPClient(hc *http.Client) Option {
 	}
 }
 
-// WithTimeout sets the HTTP request timeout (default: 30s). Non-positive
-// values are ignored. When combined with WithHTTPClient, the timeout is set
-// on a copy, so the caller's client is left unchanged.
+// WithTimeout sets the time limit for each call, covering the connection,
+// the request and reading the response. The default is 30 seconds. A zero or
+// negative d is ignored. With WithHTTPClient, the timeout is set on a copy of
+// that client. A deadline on the call's context also applies, and whichever
+// ends first wins.
 func WithTimeout(d time.Duration) Option {
 	return func(c *Client) {
 		if d > 0 {

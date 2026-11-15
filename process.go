@@ -5,17 +5,33 @@ import (
 	"net/http"
 )
 
-// ProcessService handles rule processing operations.
+// ProcessService evaluates transactions against rules.
 type ProcessService struct {
 	client *Client
 }
 
-// Execute processes a transaction against a rule or ruleset and returns the result.
+// Execute evaluates a transaction against a rule or a ruleset and returns the
+// decision (POST /process). Set RuleID or RulesetID; if both are set, Aurora
+// uses RuleID.
 //
-// Either RuleID or RulesetID is required. To evaluate a new transaction, set
-// Transaction with a valid Type. To re-evaluate a transaction Aurora already
-// stored, set TransactionID; Transaction may then be omitted, because Aurora
-// evaluates the stored data rather than the request body.
+// It works in one of two modes:
+//   - New transaction: leave TransactionID empty and set Transaction with a
+//     valid Type. Aurora stores the transaction before evaluating it, and
+//     ProcessResponse.TransactionID holds its ID.
+//   - Re-evaluation: set TransactionID to an ID returned earlier. Aurora
+//     evaluates the stored data and ignores Transaction. If a reviewer has
+//     approved the transaction's case, Aurora returns Allow without running
+//     any rules.
+//
+// A rule that fails during evaluation does not produce an error from
+// Execute; it sets ProcessResponse.Error instead.
+//
+// Execute returns:
+//   - *ValidationError when the request is invalid. Nothing is sent.
+//   - ErrMissingBaseURL when the client has no base URL. Nothing is sent.
+//   - *APIError when Aurora responds with status 400 or higher. An unknown
+//     TransactionID currently comes back as status 500, not 404.
+//   - A wrapped network or decoding error otherwise.
 func (s *ProcessService) Execute(ctx context.Context, req *ProcessRequest) (*ProcessResponse, error) {
 	if err := req.validate(); err != nil {
 		return nil, err
@@ -34,6 +50,9 @@ func (s *ProcessService) Execute(ctx context.Context, req *ProcessRequest) (*Pro
 	return &resp, nil
 }
 
+// validate rejects requests Aurora cannot process. When both rule_id and
+// ruleset_id are empty, Aurora fails only after storing the transaction, so
+// catching that here also avoids leaving an orphan transaction behind.
 func (req *ProcessRequest) validate() error {
 	if req == nil {
 		return &ValidationError{Field: "request", Message: "request is required"}
@@ -52,7 +71,8 @@ func (req *ProcessRequest) validate() error {
 		return nil
 	}
 
-	// Re-evaluation: the type is optional, but reject one that is set and invalid.
+	// Re-evaluation: Aurora ignores Transaction, but a set, invalid type is
+	// still rejected because it points to a mistake in the caller's code.
 	if req.Transaction != nil && req.Transaction.Type != "" && !validTransactionTypes[req.Transaction.Type] {
 		return &ValidationError{Field: "transaction.type", Message: "invalid transaction type"}
 	}

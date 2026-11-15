@@ -1,6 +1,6 @@
 package aurora
 
-// Transaction type constants.
+// Values for Transaction.Type. These are the only types Aurora accepts.
 const (
 	TransactionTypeCard           = "card"
 	TransactionTypeTransfer       = "transfer"
@@ -18,7 +18,7 @@ const (
 	TransactionTypeInvoice        = "invoice"
 )
 
-// Transfer subtype constants for Transfer.TransferType.
+// Values for Transfer.TransferType.
 const (
 	TransferTypeWalletToWallet = "wallet_to_wallet"
 	TransferTypeWalletToIBAN   = "wallet_to_iban"
@@ -26,18 +26,19 @@ const (
 	TransferTypeRemittance     = "remittance"
 )
 
-// Withdrawal method constants for Withdrawal.WithdrawalMethod.
+// Values for Withdrawal.WithdrawalMethod.
 const (
 	WithdrawalMethodMoneyTransferCollection = "money_transfer_collection"
 )
 
-// Customer account type constants.
+// Values for Transaction.CustomerAccountType.
 const (
 	CustomerAccountTypeIndividual   = "individual"
 	CustomerAccountTypeOrganization = "organization"
 )
 
-// validTransactionTypes is the set of accepted transaction types.
+// validTransactionTypes is the set of Transaction.Type values Aurora accepts.
+// Keep it in sync with the constants above.
 var validTransactionTypes = map[string]bool{
 	TransactionTypeCard:           true,
 	TransactionTypeTransfer:       true,
@@ -55,7 +56,7 @@ var validTransactionTypes = map[string]bool{
 	TransactionTypeInvoice:        true,
 }
 
-// Callback status constants for CallbackTransactionRequest.Status.
+// Values for CallbackTransactionRequest.Status.
 const (
 	CallbackStatusSuccess = "success"
 	CallbackStatusFailed  = "failed"
