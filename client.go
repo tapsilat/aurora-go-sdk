@@ -92,7 +92,7 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body any) 
 // underlying TCP connection can be reused by the HTTP transport pool.
 func drainBody(body io.ReadCloser) {
 	_, _ = io.Copy(io.Discard, io.LimitReader(body, maxDrainSize))
-	body.Close()
+	_ = body.Close()
 }
 
 // do sends req and decodes a successful JSON response into v, unless v is nil.
