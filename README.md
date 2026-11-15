@@ -27,8 +27,9 @@ func main() {
 	)
 
 	resp, err := client.Process.Execute(context.Background(), &aurora.ProcessRequest{
-		RuleID: "your-rule-id",
+		RulesetID: "your-ruleset-id",
 		Transaction: &aurora.Transaction{
+			Type: aurora.TransactionTypeCard,
 			Common: &aurora.Common{
 				Amount:   250.00,
 				Currency: "USD",
@@ -50,9 +51,11 @@ func main() {
 
 | Option | Description |
 |---|---|
-| `WithBaseURL(url)` | Set the API host (e.g. `https://api.example.com`). The path `/api/v1` is appended automatically. |
-| `WithHTTPClient(client)` | Provide a custom `*http.Client`. |
-| `WithTimeout(duration)` | Set HTTP client timeout (default: 30s). |
+| `WithBaseURL(url)` | **Required.** Set the API host (e.g. `https://api.example.com`). The path `/api/v1` is appended automatically. Without it, every call returns `aurora.ErrMissingBaseURL`. |
+| `WithHTTPClient(client)` | Provide a custom `*http.Client`. It is never modified; `nil` is ignored. |
+| `WithTimeout(duration)` | Set the request timeout (default: 30s). With `WithHTTPClient`, it is applied to a copy of your client. Option order does not matter. |
+
+Create one client and reuse it; it is safe for concurrent use.
 
 ### Authentication
 
@@ -64,7 +67,8 @@ client := aurora.NewClient("your-api-key")
 
 ## Process
 
-Execute a rule against a transaction using `client.Process.Execute()`.
+Execute a rule or ruleset against a transaction using `client.Process.Execute()`.
+Either `RuleID` or `RulesetID` is required, and a new transaction needs a valid `Type`.
 
 ### With a Single Rule
 
@@ -72,6 +76,7 @@ Execute a rule against a transaction using `client.Process.Execute()`.
 resp, err := client.Process.Execute(ctx, &aurora.ProcessRequest{
     RuleID: "rule-id",
     Transaction: &aurora.Transaction{
+        Type: aurora.TransactionTypeCard,
         Common: &aurora.Common{
             Amount:   100.00,
             Currency: "TRY",
@@ -87,6 +92,7 @@ resp, err := client.Process.Execute(ctx, &aurora.ProcessRequest{
 resp, err := client.Process.Execute(ctx, &aurora.ProcessRequest{
     RulesetID: "ruleset-id",
     Transaction: &aurora.Transaction{
+        Type: aurora.TransactionTypeTransfer,
         Common: &aurora.Common{
             Amount:   500.00,
             Currency: "EUR",
@@ -99,15 +105,25 @@ resp, err := client.Process.Execute(ctx, &aurora.ProcessRequest{
 })
 ```
 
+### Re-evaluating a Stored Transaction
+
+Pass the `TransactionID` returned by an earlier call. Aurora evaluates the
+stored transaction, so `Transaction` can be omitted.
+
+```go
+resp, err := client.Process.Execute(ctx, &aurora.ProcessRequest{
+    RulesetID:     "ruleset-id",
+    TransactionID: previous.TransactionID,
+})
+```
+
 ### Full Example
 
 ```go
 resp, err := client.Process.Execute(ctx, &aurora.ProcessRequest{
-    RuleID:        "1e7b3b7b-0b3b-4b7b-8b3b-0b3b7b0b3b7b",
-    RulesetID:     "2a8c4d9e-1f2a-4b3c-9d8e-7f6a5b4c3d2e",
-    TransactionID: "txn_20260326_0001",
+    RulesetID: "2a8c4d9e-1f2a-4b3c-9d8e-7f6a5b4c3d2e",
     Transaction: &aurora.Transaction{
-        Type:            "card",
+        Type:            aurora.TransactionTypeCard,
         TransactionType: "purchase",
         AccountAgeDays:  "180",
         CustomerAgeYears: "29",
@@ -152,18 +168,28 @@ resp, err := client.Process.Execute(ctx, &aurora.ProcessRequest{
 
 ```go
 type ProcessResponse struct {
-    Allow          bool          // transaction is allowed
-    AllowMessage   string        // message when allowed
-    Rejected       bool          // transaction is rejected
-    RejectMessage  string        // reason for rejection
-    NeedInspect    bool          // transaction needs manual review
-    InspectMessage string        // reason for inspection
-    Score          int           // risk score
-    Error          bool          // processing error occurred
-    ErrorMessage   string        // error details
-    ExecutionTime  time.Duration // rule execution duration
+    TransactionID    string        // Aurora transaction ID; use it to re-evaluate
+    Allow            bool          // transaction is allowed
+    AllowMessage     string        // message when allowed
+    Rejected         bool          // transaction is rejected
+    RejectMessage    string        // reason for rejection
+    Challenge        bool          // customer must pass an extra check (e.g. OTP)
+    ChallengeMessage string        // reason for the challenge
+    ChallengeType    string        // kind of challenge requested
+    NeedInspect      bool          // transaction needs manual review
+    InspectMessage   string        // reason for inspection
+    Score            int           // risk score
+    Warnings         []RuleWarning // non-blocking findings
+    Error            bool          // at least one active rule failed to evaluate
+    ErrorMessage     string        // error details
+    ExecutionTime    time.Duration // rule execution duration
 }
 ```
+
+Normally exactly one of `Allow`, `Rejected`, `Challenge` and `NeedInspect` is
+true. `Error` can be set together with a `Rejected`, `Challenge` or
+`NeedInspect` decision; treat a response with `Error` and no other decision as
+not allowed.
 
 ### Transaction Fields
 
@@ -217,49 +243,62 @@ The `Transaction` struct uses nested sub-structs to organize fields by category.
 
 ## Error Handling
 
-API errors are returned as `*aurora.APIError`:
+| Error | When |
+|---|---|
+| `*aurora.ValidationError` | The request is invalid; nothing was sent. `Field` names the problem. |
+| `*aurora.APIError` | Aurora returned a status of 400 or above. `Message` is the server's message, `Body` the raw response. |
+| `aurora.ErrMissingBaseURL` | The client was created without `WithBaseURL`. |
+| other | Network failure, timeout or context cancellation (check with `errors.Is(err, context.DeadlineExceeded)`). |
 
 ```go
 resp, err := client.Process.Execute(ctx, req)
 if err != nil {
     var apiErr *aurora.APIError
-    if errors.As(err, &apiErr) {
+    switch {
+    case aurora.IsRateLimited(err):
+        // back off and retry later
+    case aurora.IsUnauthorized(err):
+        // check the API key
+    case errors.As(err, &apiErr):
         fmt.Printf("API error %d: %s\n", apiErr.StatusCode, apiErr.Message)
     }
     log.Fatal(err)
 }
 ```
 
+`aurora.IsNotFound(err)` is also available.
+
 ## Callback
 
-Send a callback transaction using `client.Callback.Transaction()`.
+Report the final outcome of a payment using `client.Callback.Transaction()`.
+`PaymentID` must match the `common.payment_id` sent with the process request.
+Sending the same status again is safe.
 
 ```go
 resp, err := client.Callback.Transaction(ctx, &aurora.CallbackTransactionRequest{
     Message:   "Payment completed",
     PaymentID: "pay_1234567890",
-    Status:    "success",
+    Status:    aurora.CallbackStatusSuccess,
 })
 if err != nil {
     log.Fatal(err)
 }
 
-fmt.Printf("Success: %v | Message: %s\n", resp.Success, resp.Message)
+fmt.Printf("Message: %s\n", resp.Message)
 ```
 
 ### Request
 
 | Field | JSON Key | Description |
 |---|---|---|
-| `Message` | `message` | Callback message |
-| `PaymentID` | `payment_id` | Payment identifier |
-| `Status` | `status` | Transaction status |
+| `Message` | `message` | Outcome description. Required. |
+| `PaymentID` | `payment_id` | The `common.payment_id` of the processed transaction. Required. |
+| `Status` | `status` | `aurora.CallbackStatusSuccess` (`success`) or `aurora.CallbackStatusFailed` (`failed`). Required. |
 
 ### Response
 
 ```go
 type CallbackTransactionResponse struct {
-    Success bool   // operation succeeded
     Message string // response message
 }
 ```
