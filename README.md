@@ -303,6 +303,41 @@ type CallbackTransactionResponse struct {
 }
 ```
 
+## Integration Samples
+
+Tell Aurora what your integration sends, so its rule self-test can show, before any real transaction arrives, on which of your transaction flows each rule can act and why not on the others. Build the samples with the same code that builds your real `Process` requests.
+
+```go
+_, err := client.Integration.PublishSamples(ctx, &aurora.PublishSamplesRequest{
+    Source: "admin",
+    Samples: []aurora.IntegrationSample{{
+        Flow:        "bank_withdraw",
+        Title:       "Banka çekimi",
+        // Fields with the same value on every transaction of this flow.
+        FixedFields: []string{aurora.FieldTransactionType, aurora.FieldPaymentMethod, aurora.FieldCurrency},
+        Transaction: buildBankWithdrawTransaction(sampleInput),
+    }},
+})
+```
+
+A publish replaces every sample the source published before; an empty list removes them. Fields left empty in a sample are taken to be never sent, fields with a value that are not in `FixedFields` are taken to vary.
+
+When a flow never carries a field by its nature, say so with `Absent`. Aurora then reports that a rule needing it is not meant for this flow, rather than that the data is missing:
+
+```go
+aurora.IntegrationSample{
+    Flow: "partner_reference_issue",
+    // The sender is a partner institution: no member account.
+    Absent: []aurora.AbsentField{
+        {Field: aurora.FieldAccountAgeDays, Reason: aurora.AbsentNotAMember},
+        {Field: aurora.FieldBillingName, Reason: aurora.AbsentNotAnOrder},
+    },
+    Transaction: buildPartnerIssueTransaction(sampleInput),
+}
+```
+
+Reasons: `AbsentNotAMember` (no member account), `AbsentNoSession` (no user session, so no IP or device), `AbsentNotAnOrder` (no billing or shipping) and `AbsentNotCollected` (the flow does not collect it). Absent fields must be empty in the sample.
+
 ## License
 
 MIT
