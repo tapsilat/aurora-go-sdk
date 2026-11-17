@@ -13,57 +13,6 @@ type IntegrationService struct {
 	client *Client
 }
 
-// Field names to list in IntegrationSample.FixedFields. Any transaction field
-// name Aurora knows is accepted; these are the usual ones.
-const (
-	FieldTransactionType  = "transaction_type"
-	FieldPaymentMethod    = "payment_method"
-	FieldCurrency         = "currency"
-	FieldTransferType     = "transfer_type"
-	FieldWithdrawalMethod = "withdrawal_method"
-	FieldAccountType      = "account_type"
-	FieldDepositMethod    = "deposit_method"
-	FieldIsRemoteDeposit  = "is_remote_deposit"
-	FieldCategory         = "category"
-
-	FieldAccountAgeDays          = "account_age_days"
-	FieldCustomerAccountType     = "customer_account_type"
-	FieldCustomerAgeYears        = "customer_age_years"
-	FieldRegisteredIncome        = "registered_income"
-	FieldIncomeMultiplier        = "income_multiplier"
-	FieldIsFirstTransfer         = "is_first_transfer"
-	FieldLastLoginTime           = "last_login_time"
-	FieldPasswordChangedRecently = "password_changed_recently"
-	FieldUserID                  = "user_id"
-	FieldEmail                   = "email"
-	FieldPhone                   = "phone"
-	FieldIdentityNumber          = "identity_number"
-	FieldIPAddress               = "ip_address"
-	FieldBrowserAgent            = "browser_agent"
-	FieldDeviceID                = "device_id"
-	FieldBillingName             = "billing_name"
-	FieldShippingAddress         = "shipping_address"
-)
-
-// Reasons a flow never carries a field, for IntegrationSample.Absent.
-const (
-	// AbsentNotAMember: the party is not a member of the platform, so there
-	// is no account data (a partner institution sending money).
-	AbsentNotAMember = "not_a_member"
-	// AbsentNoSession: the transaction does not come from a user session, so
-	// there is no IP or device (a payment matched from a bank statement).
-	AbsentNoSession = "no_session"
-	// AbsentNotAnOrder: the transaction is not tied to an order, so there is
-	// no billing or shipping information.
-	AbsentNotAnOrder = "not_an_order"
-	// AbsentNotCollected: the flow does not collect it.
-	AbsentNotCollected = "not_collected"
-)
-
-var validAbsentReasons = map[string]bool{
-	AbsentNotAMember: true, AbsentNoSession: true, AbsentNotAnOrder: true, AbsentNotCollected: true,
-}
-
 // AbsentField is a field a flow never carries, and why. Aurora then tells a
 // rule that needs it is not meant for this flow, instead of reporting
 // missing data.
@@ -135,31 +84,33 @@ func (req *PublishSamplesRequest) validate() error {
 	if strings.TrimSpace(req.Source) == "" {
 		return &ValidationError{Field: "source", Message: "source is required"}
 	}
-	seen := make(map[string]bool, len(req.Samples))
+
+	type sampleKey struct{ flow, variant string }
+	seen := make(map[sampleKey]bool, len(req.Samples))
 	for i, sample := range req.Samples {
-		field := fmt.Sprintf("samples[%d]", i)
+		prefix := fmt.Sprintf("samples[%d]", i)
 		if strings.TrimSpace(sample.Flow) == "" {
-			return &ValidationError{Field: field + ".flow", Message: "flow is required"}
+			return &ValidationError{Field: prefix + ".flow", Message: "flow is required"}
 		}
 		if sample.Transaction == nil || !validTransactionTypes[sample.Transaction.Type] {
-			return &ValidationError{Field: field + ".transaction.type", Message: "invalid or missing transaction type"}
+			return &ValidationError{Field: prefix + ".transaction.type", Message: "invalid or missing transaction type"}
 		}
 		absent := make(map[string]bool, len(sample.Absent))
 		for j, a := range sample.Absent {
-			afield := fmt.Sprintf("%s.absent[%d]", field, j)
+			field := fmt.Sprintf("%s.absent[%d]", prefix, j)
 			switch {
 			case strings.TrimSpace(a.Field) == "":
-				return &ValidationError{Field: afield + ".field", Message: "field is required"}
+				return &ValidationError{Field: field + ".field", Message: "field is required"}
 			case !validAbsentReasons[a.Reason]:
-				return &ValidationError{Field: afield + ".reason", Message: fmt.Sprintf("unknown reason %q", a.Reason)}
+				return &ValidationError{Field: field + ".reason", Message: fmt.Sprintf("unknown reason %q", a.Reason)}
 			case absent[a.Field]:
-				return &ValidationError{Field: afield, Message: fmt.Sprintf("field %q appears twice", a.Field)}
+				return &ValidationError{Field: field, Message: fmt.Sprintf("field %q appears twice", a.Field)}
 			}
 			absent[a.Field] = true
 		}
-		key := sample.Flow + "\x00" + sample.Variant
+		key := sampleKey{sample.Flow, sample.Variant}
 		if seen[key] {
-			return &ValidationError{Field: field, Message: fmt.Sprintf("flow %q variant %q appears twice", sample.Flow, sample.Variant)}
+			return &ValidationError{Field: prefix, Message: fmt.Sprintf("flow %q variant %q appears twice", sample.Flow, sample.Variant)}
 		}
 		seen[key] = true
 	}
