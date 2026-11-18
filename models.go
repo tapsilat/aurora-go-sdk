@@ -27,6 +27,7 @@ type Transaction struct {
 	AccountLogin   *AccountLogin   `json:"account_login,omitempty"`
 	AccountOpening *AccountOpening `json:"account_opening,omitempty"`
 	BNPL           *BNPL           `json:"bnpl,omitempty"`
+	Booking        *Booking        `json:"booking,omitempty"`
 	Card           *Card           `json:"card,omitempty"`
 	Common         *Common         `json:"common,omitempty"`
 	Crypto         *Crypto         `json:"crypto,omitempty"`
@@ -211,6 +212,21 @@ type Invoice struct {
 	PurchaseOrderID   string `json:"purchase_order_id,omitempty"`
 	VendorID          string `json:"vendor_id,omitempty"`
 	VendorName        string `json:"vendor_name,omitempty"`
+}
+
+// Booking holds reservation data; Aurora derives lead time, nights and guest name match from it.
+type Booking struct {
+	BookingReference string `json:"booking_reference,omitempty"`
+	BookingType      string `json:"booking_type,omitempty"`
+	BookingChannel   string `json:"booking_channel,omitempty"`
+	PropertyCountry  string `json:"property_country,omitempty"`
+	CheckInDate      string `json:"check_in_date,omitempty"`
+	CheckOutDate     string `json:"check_out_date,omitempty"`
+	GuestName        string `json:"guest_name,omitempty"`
+	GuestCount       string `json:"guest_count,omitempty"`
+	RoomCount        string `json:"room_count,omitempty"`
+	IsRefundable     string `json:"is_refundable,omitempty"`
+	BookingTotal     string `json:"booking_total,omitempty"`
 }
 
 // Loan holds loan application data.

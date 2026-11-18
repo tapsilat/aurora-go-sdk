@@ -115,3 +115,32 @@ func TestTransactionClientIPLocationJSON(t *testing.T) {
 		}
 	}
 }
+
+func TestTransactionBookingJSON(t *testing.T) {
+	payload, err := json.Marshal(Transaction{Type: TransactionTypeCard, Booking: &Booking{
+		BookingReference: "BK-2026-104233", BookingType: "hotel", BookingChannel: "web", PropertyCountry: "TR",
+		CheckInDate: "2026-12-20", CheckOutDate: "2026-12-23", GuestName: "Ayse Yilmaz", GuestCount: "2",
+		RoomCount: "1", IsRefundable: "true", BookingTotal: "12500.00",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire struct {
+		Booking json.RawMessage `json:"booking"`
+	}
+	if err := json.Unmarshal(payload, &wire); err != nil {
+		t.Fatal(err)
+	}
+	want := `{"booking_reference":"BK-2026-104233","booking_type":"hotel","booking_channel":"web","property_country":"TR","check_in_date":"2026-12-20","check_out_date":"2026-12-23","guest_name":"Ayse Yilmaz","guest_count":"2","room_count":"1","is_refundable":"true","booking_total":"12500.00"}`
+	if string(wire.Booking) != want {
+		t.Fatalf("booking = %s, want %s", wire.Booking, want)
+	}
+
+	payload, err = json.Marshal(Transaction{Type: TransactionTypeCard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(payload), `"booking"`) {
+		t.Fatalf("a transaction without booking must omit the group: %s", payload)
+	}
+}
