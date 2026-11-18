@@ -241,6 +241,25 @@ The `Transaction` struct uses nested sub-structs to organize fields by category.
 | `Refund` | `refund` | `DaysSincePurchase`, `OriginalTransactionID`, `RefundMethod`, `RefundReason` |
 | `Withdrawal` | `withdrawal` | `AccountType`, `ATMID`, `DailyWithdrawalCount`, `WithdrawalMethod` |
 
+#### Attributes
+
+`Attributes` (`attributes`) carries caller-defined key/value pairs for data no sub-struct covers, such as a reservation or a vehicle class. Rules read a key as `attr.<key>`.
+
+```go
+tx := &aurora.Transaction{
+	Type:   aurora.TransactionTypeCard,
+	Common: &aurora.Common{PaymentID: "pay_1", Amount: 2500, Currency: "TRY"},
+	Attributes: map[string]string{
+		"booking_reference": "BK-2026-104233",
+		"check_in_date":     "2026-12-20",
+		"check_out_date":    "2026-12-23",
+		"guest_name":        "Ayse Yilmaz",
+	},
+}
+```
+
+Keys match `^[a-z][a-z0-9_]{0,63}$`. A transaction carries at most `MaxAttributes` (50) keys and each value at most `MaxAttributeValueLength` (512) characters; `Execute` rejects anything else with a `ValidationError`. Values are strings; rules compare them as numbers when ordered against a number.
+
 ## Error Handling
 
 | Error | When |

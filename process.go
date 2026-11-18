@@ -68,7 +68,7 @@ func (req *ProcessRequest) validate() error {
 		if !validTransactionTypes[req.Transaction.Type] {
 			return &ValidationError{Field: "transaction.type", Message: "invalid or missing transaction type"}
 		}
-		return nil
+		return validateAttributes(req.Transaction.Attributes)
 	}
 
 	// Re-evaluation: Aurora ignores Transaction, but a set, invalid type is

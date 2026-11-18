@@ -39,6 +39,10 @@ type Transaction struct {
 	Transfer       *Transfer       `json:"transfer,omitempty"`
 	Withdrawal     *Withdrawal     `json:"withdrawal,omitempty"`
 
+	// Attributes are caller-defined key/value pairs that rules read as attr.<key>.
+	// Keys match ^[a-z][a-z0-9_]{0,63}$; at most MaxAttributes keys and MaxAttributeValueLength characters per value.
+	Attributes map[string]string `json:"attributes,omitempty"`
+
 	// Top-level scalar fields
 	AccountAgeDays          string `json:"account_age_days,omitempty"`
 	CustomerAccountType     string `json:"customer_account_type,omitempty"`
