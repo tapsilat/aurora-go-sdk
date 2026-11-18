@@ -47,3 +47,24 @@ func TestProcessRequestValidatesAttributes(t *testing.T) {
 		}
 	}
 }
+
+func TestProcessRequestValidatesItems(t *testing.T) {
+	request := &ProcessRequest{RulesetID: "rs", Transaction: &Transaction{Type: TransactionTypeCard,
+		Items: []map[string]string{{"check_in_date": "2026-12-20"}, {"check_in_date": "2026-12-21"}}}}
+	if err := request.validate(); err != nil {
+		t.Fatalf("valid items: %v", err)
+	}
+	payload, err := json.Marshal(request.Transaction)
+	if err != nil || !strings.Contains(string(payload), `"items":[{"check_in_date":"2026-12-20"},{"check_in_date":"2026-12-21"}]`) {
+		t.Fatalf("items wire shape: %s %v", payload, err)
+	}
+	request.Transaction.Items = append(request.Transaction.Items, map[string]string{"Bad": "x"})
+	var validation *ValidationError
+	if err := request.validate(); !errors.As(err, &validation) || validation.Field != "transaction.items[2]" {
+		t.Fatalf("invalid item: %v", err)
+	}
+	request.Transaction.Items = make([]map[string]string, MaxItems+1)
+	if err := request.validate(); !errors.As(err, &validation) || validation.Field != "transaction.items" {
+		t.Fatalf("too many items: %v", err)
+	}
+}
