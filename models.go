@@ -39,6 +39,13 @@ type Transaction struct {
 	Transfer       *Transfer       `json:"transfer,omitempty"`
 	Withdrawal     *Withdrawal     `json:"withdrawal,omitempty"`
 
+	// Attributes are caller-defined key/value pairs that rules read as attr.<key>.
+	// Keys match ^[a-z][a-z0-9_]{0,63}$; at most MaxAttributes keys and MaxAttributeValueLength characters per value.
+	Attributes map[string]string `json:"attributes,omitempty"`
+	// Items are per-item attributes, e.g. one entry per booking of an order; at most MaxItems entries under the same
+	// key and size limits. Rules run once per item with its attributes over Attributes, and the riskiest result is kept.
+	Items []map[string]string `json:"items,omitempty"`
+
 	// Top-level scalar fields
 	AccountAgeDays          string `json:"account_age_days,omitempty"`
 	CustomerAccountType     string `json:"customer_account_type,omitempty"`
