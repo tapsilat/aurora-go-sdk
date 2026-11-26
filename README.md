@@ -275,7 +275,7 @@ Keys match `^[a-z][a-z0-9_]{0,63}$`. A transaction and each item carry at most `
 | Error | When |
 |---|---|
 | `*aurora.ValidationError` | The request is invalid; nothing was sent. `Field` names the problem. |
-| `*aurora.APIError` | Aurora returned a status of 400 or above. `Message` is the server's message, `Body` the raw response. |
+| `*aurora.APIError` | Aurora returned a status of 400 or above. `Message` is the server's message, `Code` its machine-readable `error_code` (when sent), `Body` the raw response. |
 | `aurora.ErrMissingBaseURL` | The client was created without `WithBaseURL`. |
 | other | Network failure, timeout or context cancellation (check with `errors.Is(err, context.DeadlineExceeded)`). |
 
@@ -296,6 +296,16 @@ if err != nil {
 ```
 
 `aurora.IsNotFound(err)` is also available.
+
+Endpoints that send an `error_code` can be matched with `errors.Is`. The match uses the code, not the HTTP status:
+
+| Sentinel | `error_code` |
+|---|---|
+| `aurora.ErrTransactionNotFound` | `transaction_not_found` |
+| `aurora.ErrAmbiguousTransaction` | `ambiguous_transaction` (`APIError.CandidateCount` says how many transactions matched) |
+| `aurora.ErrExternalIDConflict` | `external_id_bound_to_other_transaction` |
+
+Other codes are in `APIError.Code`; compare them with the `aurora.ErrorCode...` constants.
 
 ## Callback
 
@@ -366,6 +376,55 @@ aurora.IntegrationSample{
 ```
 
 Reasons: `AbsentNotAMember` (no member account), `AbsentNoSession` (no user session, so no IP or device), `AbsentNotAnOrder` (no billing or shipping) and `AbsentNotCollected` (the flow does not collect it). Absent fields must be empty in the sample.
+
+## Outcomes
+
+Tell Aurora what a transaction turned out to be after the decision, for example fraud confirmed by a chargeback. Aurora uses these reports to show how much of the known fraud it stopped.
+
+```go
+resp, err := client.Outcomes.Report(ctx, &aurora.OutcomeReportRequest{
+    Source:      aurora.OutcomeSourceChargeback,
+    ExternalID:  "cb_789",
+    Transaction: aurora.OutcomeTransactionRef{PaymentID: "pay_123"},
+    Outcome:     aurora.OutcomeFraud,
+    FraudType:   aurora.FraudTypeStolenCard,
+    Amount:      "250.00",
+})
+switch {
+case errors.Is(err, aurora.ErrAmbiguousTransaction):
+    // several transactions share the payment ID: send TransactionID instead
+case errors.Is(err, aurora.ErrTransactionNotFound):
+    // no such transaction
+case err != nil:
+    log.Fatal(err)
+default:
+    fmt.Println(resp.TransactionID, resp.Created, resp.Changed)
+}
+```
+
+`Source` and `ExternalID` identify a report: sending the same pair again updates it. A report whose `Version` is not higher than the stored one changes nothing (`Changed` is false). To withdraw a report, send it again with `Status: aurora.OutcomeStatusRetracted` and a higher `Version`.
+
+### Request
+
+| Field | JSON Key | Description |
+|---|---|---|
+| `Source` | `source` | `OutcomeSourceChargeback`, `OutcomeSourceBankReport`, `OutcomeSourcePartnerReport`, `OutcomeSourceCustomerReport` or `OutcomeSourceOperator` (rejected from an API token). Required. |
+| `ExternalID` | `external_id` | Your ID for the report, at most 128 characters. Required. |
+| `Version` | `version` | Orders updates of one report. Zero sends nothing; Aurora uses 1. |
+| `Status` | `status` | `OutcomeStatusActive` (default) or `OutcomeStatusRetracted`. |
+| `Transaction` | `transaction` | Exactly one of `TransactionID` and `PaymentID`. Required. |
+| `Outcome` | `outcome` | `OutcomeFraud` or `OutcomeLegitimate`. Required unless retracting. |
+| `FraudType` | `fraud_type` | `FraudTypeStolenCard`, `FraudTypeAccountTakeover`, `FraudTypeFriendlyFraud`, `FraudTypeScam`, `FraudTypeMerchantFraud` or `FraudTypeOther`. Required for fraud. |
+| `ReasonCode` | `reason_code` | The source's reason code, at most 32 characters. |
+| `Amount` | `amount` | Decimal string. Defaults to the transaction amount for fraud; a higher amount is cut down to it (`AmountClamped`). |
+| `Currency` | `currency` | ISO 4217. Defaults to the transaction currency and must match it. |
+| `MoneyMoved` | `money_moved` | Whether the money left. Nil: true for chargeback and bank report, false otherwise. |
+| `ReportedAt` | `reported_at` | When the source reported it. Zero means now. |
+| `Note` | `note` | Free text, at most 1000 characters. |
+
+### Response
+
+`ReportID`, `TransactionID` (the transaction the report was recorded on; a later step of a lifecycle is moved to its first transaction), `Created`, `Changed`, `AmountClamped`, `Resolution` (how the transaction was found) and `Label`, the label Aurora settled on from all active reports (nil when none is left).
 
 ## License
 

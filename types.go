@@ -118,3 +118,93 @@ var validAbsentReasons = map[string]bool{
 	AbsentNotAnOrder:   true,
 	AbsentNotCollected: true,
 }
+
+// Values for OutcomeReportRequest.Source: who says what the transaction
+// turned out to be. Aurora rejects OutcomeSourceOperator from an API token with
+// ErrorCodeForbiddenSource; it is for panel users.
+const (
+	OutcomeSourceChargeback     = "chargeback"
+	OutcomeSourceBankReport     = "bank_report"
+	OutcomeSourcePartnerReport  = "partner_report"
+	OutcomeSourceCustomerReport = "customer_report"
+	OutcomeSourceOperator       = "operator"
+)
+
+// validOutcomeSources is the set of OutcomeReportRequest.Source values the
+// SDK sends. Aurora reserves "review_case" for its own review decisions.
+var validOutcomeSources = map[string]bool{
+	OutcomeSourceChargeback:     true,
+	OutcomeSourceBankReport:     true,
+	OutcomeSourcePartnerReport:  true,
+	OutcomeSourceCustomerReport: true,
+	OutcomeSourceOperator:       true,
+}
+
+// Values for OutcomeReportRequest.Status.
+const (
+	OutcomeStatusActive    = "active"
+	OutcomeStatusRetracted = "retracted"
+)
+
+// Values for OutcomeReportRequest.Outcome and OutcomeLabel.Label.
+const (
+	OutcomeFraud      = "fraud"
+	OutcomeLegitimate = "legitimate"
+)
+
+// Values for OutcomeReportRequest.FraudType and OutcomeLabel.FraudType.
+const (
+	FraudTypeStolenCard      = "stolen_card"
+	FraudTypeAccountTakeover = "account_takeover"
+	FraudTypeFriendlyFraud   = "friendly_fraud"
+	FraudTypeScam            = "scam"
+	FraudTypeMerchantFraud   = "merchant_fraud"
+	FraudTypeOther           = "other"
+)
+
+// validFraudTypes is the set of FraudType values Aurora accepts. Keep it in
+// sync with the constants above.
+var validFraudTypes = map[string]bool{
+	FraudTypeStolenCard:      true,
+	FraudTypeAccountTakeover: true,
+	FraudTypeFriendlyFraud:   true,
+	FraudTypeScam:            true,
+	FraudTypeMerchantFraud:   true,
+	FraudTypeOther:           true,
+}
+
+// Values for OutcomeReportResponse.Resolution: how Aurora found the
+// transaction.
+const (
+	// ResolutionExact: the given ID matched one transaction.
+	ResolutionExact = "exact"
+	// ResolutionSuccessStatus: the payment ID matched several transactions and
+	// the only successful one was taken.
+	ResolutionSuccessStatus = "success_status"
+	// ResolutionDuplicateCollapsed: the payment ID matched identical
+	// duplicates and the oldest was taken.
+	ResolutionDuplicateCollapsed = "duplicate_collapsed"
+	// ResolutionLifecycleRoot: the match was a later step of a lifecycle and
+	// the report was moved to its first transaction.
+	ResolutionLifecycleRoot = "lifecycle_root"
+)
+
+// Values for OutcomeLabel.Tier.
+const (
+	// LabelTierExternal: the label comes from an outside source such as a
+	// chargeback.
+	LabelTierExternal = "external"
+	// LabelTierInternal: the label comes only from a review decision.
+	LabelTierInternal = "internal"
+)
+
+// Values for APIError.Code.
+const (
+	ErrorCodeInvalidRequest       = "invalid_request"
+	ErrorCodeInvalidFraudType     = "invalid_fraud_type"
+	ErrorCodeCurrencyMismatch     = "currency_mismatch"
+	ErrorCodeForbiddenSource      = "forbidden_source"
+	ErrorCodeTransactionNotFound  = "transaction_not_found"
+	ErrorCodeAmbiguousTransaction = "ambiguous_transaction"
+	ErrorCodeExternalIDConflict   = "external_id_bound_to_other_transaction"
+)

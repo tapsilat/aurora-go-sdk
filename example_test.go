@@ -114,3 +114,45 @@ func ExampleAPIError() {
 		fmt.Println("network error:", err)
 	}
 }
+
+func ExampleOutcomeService_Report() {
+	client := aurora.NewClient("your-api-key", aurora.WithBaseURL("https://aurora.example.com"))
+
+	resp, err := client.Outcomes.Report(context.Background(), &aurora.OutcomeReportRequest{
+		Source:      aurora.OutcomeSourceChargeback,
+		ExternalID:  "cb_789", // your chargeback ID; sending it again updates the same report
+		Transaction: aurora.OutcomeTransactionRef{PaymentID: "pay_123"},
+		Outcome:     aurora.OutcomeFraud,
+		FraudType:   aurora.FraudTypeStolenCard,
+		Amount:      "250.00",
+	})
+
+	var apiErr *aurora.APIError
+	switch {
+	case err == nil:
+		fmt.Println("recorded on", resp.TransactionID, "new:", resp.Created)
+	case errors.Is(err, aurora.ErrAmbiguousTransaction) && errors.As(err, &apiErr):
+		// Several transactions share the payment ID; send TransactionID instead.
+		fmt.Println("payment ID matches", apiErr.CandidateCount, "transactions")
+	case errors.Is(err, aurora.ErrTransactionNotFound):
+		fmt.Println("no such transaction")
+	default:
+		log.Fatal(err)
+	}
+}
+
+func ExampleOutcomeService_Report_retract() {
+	client := aurora.NewClient("your-api-key", aurora.WithBaseURL("https://aurora.example.com"))
+
+	// Withdraw the report: same source and external ID, a higher version.
+	_, err := client.Outcomes.Report(context.Background(), &aurora.OutcomeReportRequest{
+		Source:      aurora.OutcomeSourceChargeback,
+		ExternalID:  "cb_789",
+		Version:     2,
+		Status:      aurora.OutcomeStatusRetracted,
+		Transaction: aurora.OutcomeTransactionRef{PaymentID: "pay_123"},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}

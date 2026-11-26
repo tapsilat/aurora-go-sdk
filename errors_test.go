@@ -105,3 +105,52 @@ func TestErrorMessageTruncationKeepsValidUTF8(t *testing.T) {
 		t.Errorf("message not marked as truncated: %q", msg)
 	}
 }
+
+func TestAPIErrorCodeParsing(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		code       string
+		candidates int
+	}{
+		{"code and count", `{"error":"x","error_code":"ambiguous_transaction","candidate_count":2}`, ErrorCodeAmbiguousTransaction, 2},
+		{"no code", `{"error":"bad rule"}`, "", 0},
+		{"plain text", "upstream down", "", 0},
+		{"code is a number", `{"error":"x","error_code":5}`, "", 0},
+		{"bad count keeps code", `{"error":"x","error_code":"ambiguous_transaction","candidate_count":"two"}`, ErrorCodeAmbiguousTransaction, 0},
+		{"error is an object keeps code", `{"error":{"a":1},"error_code":"invalid_request"}`, ErrorCodeInvalidRequest, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			apiErr := newAPIError(http.StatusConflict, []byte(tt.body))
+			if apiErr.Code != tt.code || apiErr.CandidateCount != tt.candidates {
+				t.Errorf("got (%q, %d), want (%q, %d)", apiErr.Code, apiErr.CandidateCount, tt.code, tt.candidates)
+			}
+		})
+	}
+}
+
+// Sentinels match on the code, never on the status alone.
+func TestErrorCodeSentinels(t *testing.T) {
+	notFound := &APIError{StatusCode: http.StatusNotFound, Code: ErrorCodeTransactionNotFound}
+	wrapped := errors.Join(errors.New("ctx"), notFound)
+	if !errors.Is(wrapped, ErrTransactionNotFound) {
+		t.Error("wrapped transaction_not_found does not match ErrTransactionNotFound")
+	}
+	if errors.Is(wrapped, ErrAmbiguousTransaction) || errors.Is(wrapped, ErrExternalIDConflict) {
+		t.Error("transaction_not_found matched another sentinel")
+	}
+	if errors.Is(&APIError{StatusCode: http.StatusNotFound}, ErrTransactionNotFound) {
+		t.Error("a 404 without a code matched ErrTransactionNotFound")
+	}
+	if errors.Is(&APIError{StatusCode: http.StatusConflict}, ErrAmbiguousTransaction) {
+		t.Error("a 409 without a code matched ErrAmbiguousTransaction")
+	}
+	if !errors.Is(&APIError{StatusCode: http.StatusInternalServerError, Code: ErrorCodeExternalIDConflict}, ErrExternalIDConflict) {
+		t.Error("code match must not depend on the status")
+	}
+	// The existing status helpers keep working alongside the codes.
+	if !IsNotFound(notFound) {
+		t.Error("IsNotFound")
+	}
+}

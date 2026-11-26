@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // IntegrationService tells Aurora what an integration sends, so rules can be
@@ -71,6 +72,118 @@ func (s *IntegrationService) PublishSamples(ctx context.Context, req *PublishSam
 	}
 
 	var resp PublishSamplesResponse
+	if err := s.client.do(httpReq, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// Identity is who Aurora takes the API key's requests to come from.
+type Identity struct {
+	Organization IdentityOrganization `json:"organization"`
+	// Token is the API key itself; nil when Aurora did not recognize the
+	// request as coming from an API key.
+	Token *IdentityToken `json:"token"`
+}
+
+// IdentityOrganization is the organization whose rules score the key's
+// transactions and where its reports are stored.
+type IdentityOrganization struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Title string `json:"title"`
+}
+
+// IdentityToken describes the API key.
+type IdentityToken struct {
+	ID        string     `json:"id"`
+	Name      string     `json:"name"`
+	ExpiresAt *time.Time `json:"expires_at"`
+}
+
+// Identity returns the organization and key the client authenticates as
+// (GET /integration/identity). Call it to check a key before relying on it:
+// an invalid or expired key returns an *APIError for which IsUnauthorized is
+// true, and a key of another organization shows up in Organization.
+func (s *IntegrationService) Identity(ctx context.Context) (*Identity, error) {
+	httpReq, err := s.client.newRequest(ctx, http.MethodGet, pathIntegrationIdentity, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp Identity
+	if err := s.client.do(httpReq, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// Connection statuses for ConnectionRequest.Status.
+const (
+	ConnectionStatusActive  = "active"
+	ConnectionStatusRemoved = "removed"
+)
+
+// ConnectionRequest reports how the integration uses the API key, for example
+// a fraud provider set up with it and the ruleset it sends.
+type ConnectionRequest struct {
+	// Source names the integration, such as "admin". Required.
+	Source string `json:"source"`
+	// Reference is the integration's ID of the setup, such as the fraud
+	// provider ID. Required.
+	Reference string `json:"reference"`
+	Name      string `json:"name,omitempty"`
+	// RulesetID is the ruleset the integration sends with Process.
+	RulesetID string `json:"ruleset_id,omitempty"`
+	Enabled   bool   `json:"enabled"`
+	CanReject bool   `json:"can_reject"`
+	// Status is ConnectionStatusActive (default) or ConnectionStatusRemoved
+	// when the setup was deleted.
+	Status string `json:"status,omitempty"`
+	// DryRun checks the key and ruleset without Aurora storing anything.
+	DryRun bool `json:"dry_run,omitempty"`
+}
+
+// ConnectionResponse is the key's identity and whether the ruleset exists in
+// its organization.
+type ConnectionResponse struct {
+	Identity
+	Ruleset RulesetCheck `json:"ruleset"`
+	// Stored is false for a dry run and a removed setup.
+	Stored bool `json:"stored"`
+}
+
+// RulesetCheck tells whether a ruleset ID names a ruleset of the key's
+// organization. Process fails for a ruleset that is not found.
+type RulesetCheck struct {
+	ID    string `json:"id"`
+	Name  string `json:"name,omitempty"`
+	Found bool   `json:"found"`
+}
+
+// ReportConnection tells Aurora how the integration uses the key (POST
+// /integration/connection), so Aurora can show it under the key, and returns
+// the key's identity and the ruleset check. Errors are as for Identity.
+func (s *IntegrationService) ReportConnection(ctx context.Context, req *ConnectionRequest) (*ConnectionResponse, error) {
+	if req == nil {
+		return nil, &ValidationError{Field: "request", Message: "request is required"}
+	}
+	if strings.TrimSpace(req.Source) == "" {
+		return nil, &ValidationError{Field: "source", Message: "source is required"}
+	}
+	if strings.TrimSpace(req.Reference) == "" {
+		return nil, &ValidationError{Field: "reference", Message: "reference is required"}
+	}
+	if req.Status != "" && req.Status != ConnectionStatusActive && req.Status != ConnectionStatusRemoved {
+		return nil, &ValidationError{Field: "status", Message: "status must be active or removed"}
+	}
+
+	httpReq, err := s.client.newRequest(ctx, http.MethodPost, pathIntegrationConnect, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp ConnectionResponse
 	if err := s.client.do(httpReq, &resp); err != nil {
 		return nil, err
 	}

@@ -16,6 +16,9 @@ const (
 	pathProcess             = "/process"
 	pathCallbackTransaction = "/callback/transaction"
 	pathIntegrationSamples  = "/integration/samples"
+	pathIntegrationIdentity = "/integration/identity"
+	pathIntegrationConnect  = "/integration/connection"
+	pathOutcomes            = "/outcomes"
 )
 
 // Request headers.
