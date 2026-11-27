@@ -5,7 +5,7 @@ Official Go SDK for the [Aurora API](https://kints.dev) — a rule-based transac
 ## Installation
 
 ```bash
-go get github.com/kintsdev/aurora-go-sdk
+go get github.com/tapsilat/aurora-go-sdk
 ```
 
 ## Quick Start
@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"log"
 
-	aurora "github.com/kintsdev/aurora-go-sdk"
+	aurora "github.com/tapsilat/aurora-go-sdk"
 )
 
 func main() {
