@@ -1,3 +1,3 @@
-module github.com/kintsdev/aurora-go-sdk
+module github.com/tapsilat/aurora-go-sdk
 
 go 1.27

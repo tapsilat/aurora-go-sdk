@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	aurora "github.com/kintsdev/aurora-go-sdk"
+	aurora "github.com/tapsilat/aurora-go-sdk"
 )
 
 type frozenField struct {
