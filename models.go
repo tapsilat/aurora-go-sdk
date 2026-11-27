@@ -344,7 +344,9 @@ type CallbackTransactionResponse struct {
 
 // ErrorResponse is the JSON body Aurora sends with an error status. Depending
 // on the endpoint, the text is under the "error" key or the "message" key.
+// Newer endpoints also send a machine-readable ErrorCode.
 type ErrorResponse struct {
-	Error   string `json:"error"`
-	Message string `json:"message,omitempty"`
+	Error     string `json:"error"`
+	Message   string `json:"message,omitempty"`
+	ErrorCode string `json:"error_code,omitempty"`
 }

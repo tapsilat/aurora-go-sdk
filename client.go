@@ -25,6 +25,9 @@ type Client struct {
 	Callback *CallbackService
 	// Integration tells Aurora what the integration sends.
 	Integration *IntegrationService
+	// Outcomes reports what transactions turned out to be, such as fraud
+	// confirmed by a chargeback.
+	Outcomes *OutcomeService
 	// Process evaluates transactions against rules.
 	Process *ProcessService
 }
@@ -57,6 +60,7 @@ func NewClient(apiKey string, opts ...Option) *Client {
 
 	c.Callback = &CallbackService{client: c}
 	c.Integration = &IntegrationService{client: c}
+	c.Outcomes = &OutcomeService{client: c}
 	c.Process = &ProcessService{client: c}
 
 	return c
