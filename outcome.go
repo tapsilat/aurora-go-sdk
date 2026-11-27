@@ -2,6 +2,7 @@ package aurora
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -13,6 +14,85 @@ const (
 	maxOutcomeExternalIDLen = 128
 	maxOutcomeReasonCodeLen = 32
 	maxOutcomeNoteLen       = 1000
+)
+
+// Values for OutcomeReportRequest.Source: who says what the transaction
+// turned out to be. Aurora rejects OutcomeSourceOperator from an API token with
+// ErrorCodeForbiddenSource; it is for panel users.
+const (
+	OutcomeSourceChargeback     = "chargeback"
+	OutcomeSourceBankReport     = "bank_report"
+	OutcomeSourcePartnerReport  = "partner_report"
+	OutcomeSourceCustomerReport = "customer_report"
+	OutcomeSourceOperator       = "operator"
+)
+
+// validOutcomeSources is the set of OutcomeReportRequest.Source values the
+// SDK sends. Aurora reserves "review_case" for its own review decisions.
+var validOutcomeSources = map[string]bool{
+	OutcomeSourceChargeback:     true,
+	OutcomeSourceBankReport:     true,
+	OutcomeSourcePartnerReport:  true,
+	OutcomeSourceCustomerReport: true,
+	OutcomeSourceOperator:       true,
+}
+
+// Values for OutcomeReportRequest.Status.
+const (
+	OutcomeStatusActive    = "active"
+	OutcomeStatusRetracted = "retracted"
+)
+
+// Values for OutcomeReportRequest.Outcome and OutcomeLabel.Label.
+const (
+	OutcomeFraud      = "fraud"
+	OutcomeLegitimate = "legitimate"
+)
+
+// Values for OutcomeReportRequest.FraudType and OutcomeLabel.FraudType.
+const (
+	FraudTypeStolenCard      = "stolen_card"
+	FraudTypeAccountTakeover = "account_takeover"
+	FraudTypeFriendlyFraud   = "friendly_fraud"
+	FraudTypeScam            = "scam"
+	FraudTypeMerchantFraud   = "merchant_fraud"
+	FraudTypeOther           = "other"
+)
+
+// validFraudTypes is the set of FraudType values Aurora accepts. Keep it in
+// sync with the constants above.
+var validFraudTypes = map[string]bool{
+	FraudTypeStolenCard:      true,
+	FraudTypeAccountTakeover: true,
+	FraudTypeFriendlyFraud:   true,
+	FraudTypeScam:            true,
+	FraudTypeMerchantFraud:   true,
+	FraudTypeOther:           true,
+}
+
+// Values for OutcomeReportResponse.Resolution: how Aurora found the
+// transaction.
+const (
+	// ResolutionExact: the given ID matched one transaction.
+	ResolutionExact = "exact"
+	// ResolutionSuccessStatus: the payment ID matched several transactions and
+	// the only successful one was taken.
+	ResolutionSuccessStatus = "success_status"
+	// ResolutionDuplicateCollapsed: the payment ID matched identical
+	// duplicates and the oldest was taken.
+	ResolutionDuplicateCollapsed = "duplicate_collapsed"
+	// ResolutionLifecycleRoot: the match was a later step of a lifecycle and
+	// the report was moved to its first transaction.
+	ResolutionLifecycleRoot = "lifecycle_root"
+)
+
+// Values for OutcomeLabel.Tier.
+const (
+	// LabelTierExternal: the label comes from an outside source such as a
+	// chargeback.
+	LabelTierExternal = "external"
+	// LabelTierInternal: the label comes only from a review decision.
+	LabelTierInternal = "internal"
 )
 
 // OutcomeService tells Aurora what a transaction turned out to be after the
@@ -154,7 +234,7 @@ func (req *OutcomeReportRequest) validate() error {
 		return &ValidationError{Field: "external_id", Message: "external_id is required"}
 	}
 	if utf8.RuneCountInString(req.ExternalID) > maxOutcomeExternalIDLen {
-		return &ValidationError{Field: "external_id", Message: "external_id is longer than 128 characters"}
+		return &ValidationError{Field: "external_id", Message: fmt.Sprintf("external_id is longer than %d characters", maxOutcomeExternalIDLen)}
 	}
 	if req.Version < 0 {
 		return &ValidationError{Field: "version", Message: "version must be 1 or higher"}
@@ -191,10 +271,10 @@ func (req *OutcomeReportRequest) validate() error {
 	}
 
 	if utf8.RuneCountInString(req.ReasonCode) > maxOutcomeReasonCodeLen {
-		return &ValidationError{Field: "reason_code", Message: "reason_code is longer than 32 characters"}
+		return &ValidationError{Field: "reason_code", Message: fmt.Sprintf("reason_code is longer than %d characters", maxOutcomeReasonCodeLen)}
 	}
 	if utf8.RuneCountInString(req.Note) > maxOutcomeNoteLen {
-		return &ValidationError{Field: "note", Message: "note is longer than 1000 characters"}
+		return &ValidationError{Field: "note", Message: fmt.Sprintf("note is longer than %d characters", maxOutcomeNoteLen)}
 	}
 	return nil
 }

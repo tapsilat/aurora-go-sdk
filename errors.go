@@ -12,6 +12,17 @@ import (
 // WithBaseURL. No request is sent.
 var ErrMissingBaseURL = errors.New("aurora: base URL is not configured (use WithBaseURL)")
 
+// Values for APIError.Code.
+const (
+	ErrorCodeInvalidRequest       = "invalid_request"
+	ErrorCodeInvalidFraudType     = "invalid_fraud_type"
+	ErrorCodeCurrencyMismatch     = "currency_mismatch"
+	ErrorCodeForbiddenSource      = "forbidden_source"
+	ErrorCodeTransactionNotFound  = "transaction_not_found"
+	ErrorCodeAmbiguousTransaction = "ambiguous_transaction"
+	ErrorCodeExternalIDConflict   = "external_id_bound_to_other_transaction"
+)
+
 // Sentinels for the machine-readable error codes Aurora sends. Match them with
 // errors.Is; the match uses APIError.Code, not the HTTP status.
 var (
@@ -61,31 +72,25 @@ func (e *APIError) Is(target error) bool {
 }
 
 // newAPIError builds an APIError from a failed response. See APIError.Message
-// for how the message is chosen.
+// for how the message is chosen. error_code and candidate_count are read one
+// by one, so a malformed field does not hide the other.
 func newAPIError(statusCode int, body []byte) *APIError {
 	apiErr := &APIError{
 		StatusCode: statusCode,
 		Message:    errorMessage(statusCode, body),
 		Body:       body,
 	}
-	apiErr.Code, apiErr.CandidateCount = errorDetails(body)
-	return apiErr
-}
 
-// errorDetails reads error_code and candidate_count from an error body. Each
-// is read on its own, so a malformed field does not hide the other.
-func errorDetails(body []byte) (code string, candidates int) {
 	var fields map[string]json.RawMessage
-	if json.Unmarshal(body, &fields) != nil {
-		return "", 0
+	if json.Unmarshal(body, &fields) == nil {
+		if raw, ok := fields["error_code"]; ok {
+			_ = json.Unmarshal(raw, &apiErr.Code)
+		}
+		if raw, ok := fields["candidate_count"]; ok {
+			_ = json.Unmarshal(raw, &apiErr.CandidateCount)
+		}
 	}
-	if raw, ok := fields["error_code"]; ok {
-		_ = json.Unmarshal(raw, &code)
-	}
-	if raw, ok := fields["candidate_count"]; ok {
-		_ = json.Unmarshal(raw, &candidates)
-	}
-	return code, candidates
+	return apiErr
 }
 
 func errorMessage(statusCode int, body []byte) string {
